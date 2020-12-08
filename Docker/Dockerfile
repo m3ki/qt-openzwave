@@ -21,9 +21,6 @@ ENV DEBIAN_FRONTEND noninteractive
 
 WORKDIR /opt
 
-#RUN echo 'APT::Default-Release "stable";' > /etc/apt/apt.conf.d/99defaultrelease \
-#	&& echo 'deb     http://ftp.debian.org/debian/    unstable main contrib non-free' > /etc/apt/sources.list.d/unstable.list \
-#	&& apt update
 RUN apt update && apt-get -y install build-essential rapidjson-dev cmake pkgconf python libunwind-dev libcurl4-openssl-dev libx11-dev libglu1-mesa-dev libexecline-dev qtbase5-dev qt5-qmake qt5-qmake-bin libqt5core5a libqt5remoteobjects5 libqt5websockets5 libqt5svg5 libqt5serialport5-dev libqt5remoteobjects5-dev libqt5websockets5-dev libqt5svg5-dev libqt5serialport5-dev qtbase5-private-dev git
 
 ARG distcchosts=''
@@ -33,18 +30,6 @@ ARG qtversion="5.15.1"
 ENV DISTCC_HOSTS="$distcchosts"
 
 RUN if [ -n "${DISTCC_HOSTS}" ]; then cd /usr/local/bin; ln /usr/bin/distcc gcc;  ln /usr/bin/distcc g++; echo "Using DistCC hosts ${DISTCC_HOSTS}"; fi
-
-#ENV PATH=$PATH:/opt/depot_tools/
-#ENV DEPOT_TOOLS_UPDATE=0
-#RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \
-#	&& cd depot_tools && git checkout 464e9ff && cd .. \
-#	&& mkdir breakpad \
-#	&& cd breakpad \
-#	&& fetch breakpad \
-#	&& cd src \
-#	&& ./configure --disable-processor --disable-tools \
-#	&& make -j${concurrency} \
-#	&& make install
 
 RUN git clone https://github.com/OpenZWave/open-zwave.git \
 	&& cd open-zwave \
@@ -94,7 +79,7 @@ ARG qtversion="5.15.1"
 ENV LC_ALL C
 ENV DEBIAN_FRONTEND noninteractive
 
-LABEL maintainer="firstof9@gmail.com"
+LABEL maintainer="igor@m3ki.net"
 
 WORKDIR /opt
 
@@ -121,9 +106,7 @@ COPY --from=builder /usr/local/bin/* /usr/local/bin/
 COPY --from=builder /usr/lib/*/libqt-* /usr/local/lib/
 COPY --from=builder /usr/local/lib*/libopenzwave* /usr/local/lib/
 COPY --from=builder /usr/lib/*/libQt5Mqtt* /usr/local/lib/
-#COPY --from=builder /usr/share/qt5/lib/libQt5Core* /usr/share/qt5/lib/libQt5Network* /usr/share/qt5/lib/libQt5Mqtt* /usr/share/qt5/lib/libQt5WebSockets* /usr/share/qt5/lib/libQt5RemoteObjects* /usr/share/qt5/lib/
-#COPY --from=builder /usr/share/qt5/lib/libqt-openzwave* /usr/share/qt5/lib/
-#COPY --from=builder /usr/share/qt5/qt-openzwavedatabase.rcc /usr/share/qt5/
+
 
 COPY Docker/base/ /
 
@@ -162,10 +145,7 @@ RUN apt update \
 
 
 COPY --from=builder /usr/local/bin/ozwadmin /usr/local/bin/
-#COPY --from=builder /usr/share/qt5/lib/libQt5Svg* /usr/share/qt5/lib/libQt5Widgets* /usr/share/qt5/lib/libQt5Gui* /usr/share/qt5/lib/libQt5Xml* /usr/share/qt5/lib/libQt5SerialPort* /usr/share/qt5/lib/libQt5DBus* /usr/share/qt5/lib/
-#COPY --from=builder /usr/share/qt5/plugins /usr/share/qt5/plugins
-#COPY --from=builder /usr/share/qt5/resources /usr/share/qt5/resources
-#COPY --from=builder /usr/share/qt5/libexec /usr/share/qt5/libexec
+
 COPY Docker/allinone/ /
 
 ENV BP_DB_PATH="/opt/ozw/config/crashes/"

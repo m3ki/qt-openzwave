@@ -10,7 +10,7 @@
 
 Q_LOGGING_CATEGORY(ozwmp, "ozw.mqtt.publisher");
 
-QString mqttClientStateToString(QMqttClient::ClientState state) 
+QString mqttClientStateToString(QMqttClient::ClientState state)
 {
     switch (state) {
         case QMqttClient::ClientState::Disconnected:
@@ -23,7 +23,7 @@ QString mqttClientStateToString(QMqttClient::ClientState state)
     return "Unknown";
 }
 
-QString mqttClientErrorToString(QMqttClient::ClientError error) 
+QString mqttClientErrorToString(QMqttClient::ClientError error)
 {
     switch (error) {
         case QMqttClient::ClientError::NoError:
@@ -51,7 +51,7 @@ QString mqttClientErrorToString(QMqttClient::ClientError error)
 }
 
 
-mqttpublisher::mqttpublisher(QSettings *settings, QObject *parent) : 
+mqttpublisher::mqttpublisher(QSettings *settings, QObject *parent) :
     QObject(parent),
     m_ready(false),
     m_uncleanshutdown(false)
@@ -61,9 +61,15 @@ mqttpublisher::mqttpublisher(QSettings *settings, QObject *parent) :
     this->m_client->setHostname(settings->value("MQTTServer", "127.0.0.1").toString());
     this->m_client->setPort(static_cast<quint16>(settings->value("MQTTPort", 1883).toInt()));
     this->m_client->setClientId(QString("qt-openzwave-%1").arg(settings->value("Instance", 1).toInt()));
+
+    QString mqtt_keep_alive = qgetenv("MQTT_KEEP_ALIVE");
+    if (!mqtt_keep_alive.isEmpty()) {
+        this->m_client->setKeepAlive(mqtt_keep_alive.toInt());
+    }
+
     if (settings->contains("MQTTUsername")) {
         QString mqttpass = qgetenv("MQTT_PASSWORD");
-    
+
         QFile mp_file("/run/secrets/MQTT_PASSWORD");
         if (mp_file.open(QIODevice::ReadOnly | QIODevice::Text)) {
             mqttpass = mp_file.readLine().trimmed();
@@ -90,7 +96,7 @@ mqttpublisher::mqttpublisher(QSettings *settings, QObject *parent) :
     connect(this->m_client, &QMqttClient::stateChanged, this, &mqttpublisher::updateLogStateChange);
     connect(this->m_client, &QMqttClient::disconnected, this, &mqttpublisher::brokerDisconnected);
     connect(this->m_client, &QMqttClient::errorChanged, this, &mqttpublisher::brokerError);
-    connect(m_client, &QMqttClient::pingResponseReceived, this, []() {
+    connect(this->m_client, &QMqttClient::pingResponseReceived, this, []() {
         const QString content = QDateTime::currentDateTime().toString()
                     + QLatin1String(" PingResponse")
                     + QLatin1Char('\n');
@@ -149,7 +155,7 @@ bool mqttpublisher::isReady()
 }
 void mqttpublisher::setReady(bool ready)
 {
-    if (this->m_ready != ready) 
+    if (this->m_ready != ready)
     {
         this->m_ready = ready;
         emit readyChanged(this->m_ready);
@@ -158,7 +164,7 @@ void mqttpublisher::setReady(bool ready)
 
 
 void mqttpublisher::cleanTopics(QMqttMessage msg) {
-    if (msg.retain() == true) { 
+    if (msg.retain() == true) {
         qCDebug(ozwmp) << "Topics: " << msg.topic().name();
         rapidjson::Document jsmsg;
         jsmsg.Parse(msg.payload());
@@ -200,7 +206,7 @@ void mqttpublisher::doStats() {
         return;
 
     if (!this->m_qtozwdaemon) {
-        return; 
+        return;
     }
     QTOZWManager *manager = this->m_qtozwdaemon->getManager();
     DriverStatistics ds = manager->GetDriverStatistics();
@@ -382,7 +388,7 @@ void mqttpublisher::setOZWDaemon(qtozwdaemon *ozwdaemon) {
     connect(manager, &QTOZWManager::starting, this, &mqttpublisher::starting);
     connect(manager, &QTOZWManager::started, this, &mqttpublisher::started);
     connect(manager, &QTOZWManager::stopped, this, &mqttpublisher::stopped);
-    
+
     QT2JS::SetString(this->m_ozwstatus, "OpenZWave_Version", this->getQTOZWManager()->getVersionAsString());
     QT2JS::SetString(this->m_ozwstatus, "OZWDaemon_Version", QCoreApplication::applicationVersion());
     QT2JS::SetString(this->m_ozwstatus, "QTOpenZWave_Version", this->m_qtozwdaemon->getQTOpenZWave()->getVersion());
@@ -390,8 +396,8 @@ void mqttpublisher::setOZWDaemon(qtozwdaemon *ozwdaemon) {
 
     this->m_currentStartTime = QDateTime::currentDateTime();
     if (settings->value("MQTTTLS").toBool() == true) {
-        this->m_client->connectToHostEncrypted();   
-    } else { 
+        this->m_client->connectToHostEncrypted();
+    } else {
         this->m_client->connectToHost();
     }
 }
@@ -473,7 +479,7 @@ bool mqttpublisher::sendValueUpdate(quint64 vidKey) {
         qCWarning(ozwmp) << "sendValueUpdate: Can't find CC for Value: " << vidKey;
         return false;
     }
-    QT2JS::SetUInt64(*this->m_values[vidKey], "TimeStamp", QDateTime::currentSecsSinceEpoch()); 
+    QT2JS::SetUInt64(*this->m_values[vidKey], "TimeStamp", QDateTime::currentSecsSinceEpoch());
     this->m_client->publish(QMqttTopicName(getValueTopic(MQTT_OZW_VID_TOPIC, node, instance, cc, vidKey)), QT2JS::getJSON(*this->m_values[vidKey]), 0, true);
     if (!this->isReady())
         return false;
@@ -589,7 +595,7 @@ void mqttpublisher::valueAdded(quint64 vidKey) {
     if (!(jsinstance = this->getInstanceJSON(node, instance))) {
         jsinstance = new rapidjson::Document(rapidjson::kObjectType);
         QT2JS::SetInt(*jsinstance, "Instance", instance);
-        this->m_instances[node][instance] = jsinstance;            
+        this->m_instances[node][instance] = jsinstance;
     }
     this->sendInstanceUpdate(node, instance);
 
@@ -612,11 +618,11 @@ void mqttpublisher::valueAdded(quint64 vidKey) {
         QT2JS::SetString(*this->m_values[vidKey], "Event", "valueAdded");
         if (this->sendValueUpdate(vidKey))
             qCDebug(ozwmp) << "Publishing Event valueAdded:" << vidKey;
- 
+
     }
 }
 void mqttpublisher::valueRemoved(quint64 vidKey) {
-    if (this->delValueTopic(vidKey)) 
+    if (this->delValueTopic(vidKey))
         qCDebug(ozwmp) << "Publishing Event valueRemoved:" << vidKey;
 
     if (this->m_values.find(vidKey) == this->m_values.end()) {
@@ -701,7 +707,7 @@ void mqttpublisher::nodeNew(quint8 node) {
     }
     this->m_nodeModel->populateJsonObject(*this->m_nodes[node], node, this->m_qtozwdaemon->getManager());
     QT2JS::SetString(*this->m_nodes[node], "Event", "nodeNew");
-    if (this->sendNodeUpdate(node)) 
+    if (this->sendNodeUpdate(node))
         qCDebug(ozwmp) << "Publishing Event NodeNew:" << node;
 
 }
@@ -711,7 +717,7 @@ void mqttpublisher::nodeAdded(quint8 node) {
     }
     this->m_nodeModel->populateJsonObject(*this->m_nodes[node], node, this->m_qtozwdaemon->getManager());
     QT2JS::SetString(*this->m_nodes[node], "Event", "nodeAdded");
-    if (this->sendNodeUpdate(node)) 
+    if (this->sendNodeUpdate(node))
         qCDebug(ozwmp) << "Publishing Event NodeAdded:" << node;
 
 }
@@ -728,7 +734,7 @@ void mqttpublisher::nodeRemoved(quint8 node) {
         this->m_assoications.remove(node);
     }
 
-    if (this->m_nodes.find(node) == this->m_nodes.end()) { 
+    if (this->m_nodes.find(node) == this->m_nodes.end()) {
         delete this->m_nodes.take(node);
     }
 }
@@ -744,7 +750,7 @@ void mqttpublisher::nodeReset(quint8 node) {
         this->m_assoications.remove(node);
     }
 
-    if (this->m_nodes.find(node) == this->m_nodes.end()) { 
+    if (this->m_nodes.find(node) == this->m_nodes.end()) {
         delete this->m_nodes.take(node);
     }
 }
@@ -758,8 +764,8 @@ void mqttpublisher::nodeNaming(quint8 node) {
 void mqttpublisher::nodeEvent(quint8 node, quint8 event) {
     Q_UNUSED(node);
     Q_UNUSED(event);
-    /* we dont do anything here, as NodeEvent is just a BASIC message 
-     * which should be handled via the normal ValueID/ValueChanged Events 
+    /* we dont do anything here, as NodeEvent is just a BASIC message
+     * which should be handled via the normal ValueID/ValueChanged Events
      */
 }
 void mqttpublisher::nodeProtocolInfo(quint8 node) {
@@ -787,7 +793,7 @@ void mqttpublisher::nodeQueriesComplete(quint8 node) {
 void mqttpublisher::nodeGroupChanged(quint8 node, quint8 group) {
     rapidjson::Document *jsinstance = new rapidjson::Document(rapidjson::kObjectType);
     this->m_assocModel->populateJsonObject(*jsinstance, node, group, this->m_qtozwdaemon->getManager());
-    
+
     if (this->sendAssociationUpdate(node, group, *jsinstance))
         qCDebug(ozwmp) << "Publishing Event nodeGroupChanged: " << node << " Group: " << group;
 
@@ -874,7 +880,7 @@ void mqttpublisher::controllerCommand(quint8 node, NotificationTypes::QTOZW_Noti
         metaEnum = QMetaEnum::fromType<NotificationTypes::QTOZW_Notification_Controller_Error>();
         QT2JS::SetString(js, "Error", metaEnum.valueToKey(error));
     }
-        
+
     switch(command) {
         case NotificationTypes::Ctrl_Cmd_None: {
             qCWarning(ozwmp) << "Got a controllerCommand Event with no Controller Command" << command << state << error;
@@ -1057,7 +1063,7 @@ rapidjson::Document *mqttpublisher::getCommandClassJSON(quint8 node, quint8 inst
     if (this->m_CommandClasses.find(node) != this->m_CommandClasses.end()) {
         if (this->m_CommandClasses[node].find(instance) != this->m_CommandClasses[node].end()) {
             if (this->m_CommandClasses[node][instance].find(cc) != this->m_CommandClasses[node][instance].end()) {
-                return this->m_CommandClasses[node][instance][cc]; 
+                return this->m_CommandClasses[node][instance][cc];
             }
         }
     }
