@@ -5,14 +5,15 @@
 
 ARG distcchosts=''
 ARG concurrency="12"
-ARG qtversion="5.12.9"
+ARG qtversion="5.15.1"
 
 
 # Set the base image to Alpine
-FROM fishwaldo/ozw-base:${qtversion} as builder
+#FROM fishwaldo/ozw-base:5.12.9 as builder
+FROM debian:bullseye-slim as builder
 
 # File Author / Maintainer
-LABEL maintainer="justin@dynam.ac"
+LABEL maintainer="igor@m3ki.net"
 
 
 ENV LC_ALL C
@@ -23,27 +24,27 @@ WORKDIR /opt
 #RUN echo 'APT::Default-Release "stable";' > /etc/apt/apt.conf.d/99defaultrelease \
 #	&& echo 'deb     http://ftp.debian.org/debian/    unstable main contrib non-free' > /etc/apt/sources.list.d/unstable.list \
 #	&& apt update
-RUN apt update && apt-get -y install rapidjson-dev cmake pkgconf python libunwind-dev libcurl4-openssl-dev libx11-dev libglu1-mesa-dev libexecline-dev
+RUN apt update && apt-get -y install build-essential rapidjson-dev cmake pkgconf python libunwind-dev libcurl4-openssl-dev libx11-dev libglu1-mesa-dev libexecline-dev qtbase5-dev qt5-qmake qt5-qmake-bin libqt5core5a libqt5remoteobjects5 libqt5websockets5 libqt5svg5 libqt5serialport5-dev libqt5remoteobjects5-dev libqt5websockets5-dev libqt5svg5-dev libqt5serialport5-dev qtbase5-private-dev git
 
 ARG distcchosts=''
 ARG concurrency="12"
-ARG qtversion="5.12.9"
+ARG qtversion="5.15.1"
 
 ENV DISTCC_HOSTS="$distcchosts"
 
 RUN if [ -n "${DISTCC_HOSTS}" ]; then cd /usr/local/bin; ln /usr/bin/distcc gcc;  ln /usr/bin/distcc g++; echo "Using DistCC hosts ${DISTCC_HOSTS}"; fi
 
-# ENV PATH=$PATH:/opt/depot_tools/
-# ENV DEPOT_TOOLS_UPDATE=0
-# RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \
-# 	&& cd depot_tools && git checkout 464e9ff && cd .. \
-# 	&& mkdir breakpad \
-# 	&& cd breakpad \
-# 	&& fetch breakpad \
-# 	&& cd src \
-# 	&& ./configure --disable-processor --disable-tools \
-# 	&& make -j${concurrency} \
-# 	&& make install
+#ENV PATH=$PATH:/opt/depot_tools/
+#ENV DEPOT_TOOLS_UPDATE=0
+#RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \
+#	&& cd depot_tools && git checkout 464e9ff && cd .. \
+#	&& mkdir breakpad \
+#	&& cd breakpad \
+#	&& fetch breakpad \
+#	&& cd src \
+#	&& ./configure --disable-processor --disable-tools \
+#	&& make -j${concurrency} \
+#	&& make install
 
 RUN git clone https://github.com/OpenZWave/open-zwave.git \
 	&& cd open-zwave \
@@ -61,6 +62,15 @@ COPY qt-openzwave.pro /opt/qt-openzwave/
 ARG BP_CLIENTID
 ARG BP_CLIENTKEY
 ARG BUILDNUMBER=0
+
+RUN git clone --depth 1 -b \
+        ${qtversion} https://github.com/qt/qtmqtt /usr/src/qtmqtt \
+    && cd /usr/src/qtmqtt \
+    && /usr/lib/qt5/bin/qmake CONFIG+=release QT_BUILD_PARTS="libs tools" \
+    && make -j $(( $(nproc) + 1 )) \
+    && make install
+
+
 RUN cd qt-openzwave \
 	&& if [ -f Makefile ]; then qmake -r; make distclean; fi \
 	&& qmake -r CONFIG+=release "BP_CLIENTID=$BP_CLIENTID" "BP_CLIENTKEY=$BP_CLIENTKEY" "BUILDNUMBER=$BUILDNUMBER" \
@@ -77,19 +87,19 @@ RUN git clone https://github.com/OpenZWave/ozw-admin.git \
 
 ENV LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH"
 
-FROM debian:buster-slim as base
+FROM debian:bullseye-slim as base
 
-ARG qtversion="5.12.9"
+ARG qtversion="5.15.1"
 
 ENV LC_ALL C
 ENV DEBIAN_FRONTEND noninteractive
 
-LABEL maintainer="justin@dynam.ac"
+LABEL maintainer="firstof9@gmail.com"
 
 WORKDIR /opt
 
 RUN apt update \
-    && apt-get -y install libunwind8 libcurl4 binutils libglib2.0-0 libicu63 wget \
+    && apt-get -y install libunwind8 libcurl4 binutils libglib2.0-0 libicu67 wget \
     && apt-get -y purge binutils \
     && apt-get -y autoremove \
     && apt-get clean \
@@ -99,12 +109,21 @@ RUN case `uname -m` in x86_64) var="amd64";; armhf) var="armhf";; armv7l) var="a
 	&& tar xzf /tmp/s6-overlay.tar.gz -C / \
 	&& rm /tmp/s6-overlay.tar.gz
 
+RUN apt update\
+    && apt-get -y install libqt5core5a libqt5remoteobjects5 libqt5websockets5 libqt5network5
 
 COPY --from=builder /usr/local/bin/ozwdaemon /usr/local/bin/s6* /usr/local/bin/
 COPY --from=builder /usr/local/lib/libopenzwave.so.1.6 /usr/local/lib/
-COPY --from=builder /opt/qt/${qtversion}/lib/libQt5Core* /opt/qt/${qtversion}/lib/libQt5Network* /opt/qt/${qtversion}/lib/libQt5Mqtt* /opt/qt/${qtversion}/lib/libQt5WebSockets* /opt/qt/${qtversion}/lib/libQt5RemoteObjects* /opt/qt/${qtversion}/lib/
-COPY --from=builder /opt/qt/${qtversion}/lib/libqt-openzwave* /opt/qt/${qtversion}/lib/
-COPY --from=builder /opt/qt/${qtversion}/qt-openzwavedatabase.rcc /opt/qt/${qtversion}/
+COPY --from=builder /usr/local/lib/libQt5Mqtt* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libqt-openzwave* /usr/local/lib/
+COPY --from=builder /usr/share/qt5/qt-openzwavedatabase.rcc /usr/share/qt5/
+COPY --from=builder /usr/local/bin/* /usr/local/bin/
+COPY --from=builder /usr/lib/*/libqt-* /usr/local/lib/
+COPY --from=builder /usr/local/lib*/libopenzwave* /usr/local/lib/
+COPY --from=builder /usr/lib/*/libQt5Mqtt* /usr/local/lib/
+#COPY --from=builder /usr/share/qt5/lib/libQt5Core* /usr/share/qt5/lib/libQt5Network* /usr/share/qt5/lib/libQt5Mqtt* /usr/share/qt5/lib/libQt5WebSockets* /usr/share/qt5/lib/libQt5RemoteObjects* /usr/share/qt5/lib/
+#COPY --from=builder /usr/share/qt5/lib/libqt-openzwave* /usr/share/qt5/lib/
+#COPY --from=builder /usr/share/qt5/qt-openzwavedatabase.rcc /usr/share/qt5/
 
 COPY Docker/base/ /
 
@@ -119,7 +138,7 @@ ENTRYPOINT ["/init"]
 
 FROM base as allinone
 
-ARG qtversion="5.12.9"
+ARG qtversion="5.15.1"
 
 ENV LC_ALL C
 ENV DEBIAN_FRONTEND noninteractive
@@ -128,7 +147,7 @@ ADD https://github.com/novnc/websockify/archive/v0.9.0.tar.gz /opt/source/
 ADD https://github.com/novnc/noVNC/archive/v1.2.0.tar.gz /opt/source/
 
 RUN apt update \
-    && apt-get -y install libgl1 libpng16-16 libharfbuzz0b libfontconfig1 libmtdev1 libinput10 libxkbcommon0 libdbus-1-3 python3-setuptools python3-numpy \
+    && apt-get -y install libgl1 libpng16-16 libharfbuzz0b libfontconfig1 libmtdev1 libinput10 libxkbcommon0 libdbus-1-3 python3-setuptools python3-numpy libqt5xml5 libqt5svg5 libqt5serialport5 libqt5dbus5 libqt5gui5 libqt5widgets5\
     && apt-get -y autoremove \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
@@ -143,10 +162,10 @@ RUN apt update \
 
 
 COPY --from=builder /usr/local/bin/ozwadmin /usr/local/bin/
-COPY --from=builder /opt/qt/${qtversion}/lib/libQt5Svg* /opt/qt/${qtversion}/lib/libQt5Widgets* /opt/qt/${qtversion}/lib/libQt5Gui* /opt/qt/${qtversion}/lib/libQt5Xml* /opt/qt/${qtversion}/lib/libQt5SerialPort* /opt/qt/${qtversion}/lib/libQt5DBus* /opt/qt/${qtversion}/lib/
-COPY --from=builder /opt/qt/${qtversion}/plugins /opt/qt/${qtversion}/plugins
-COPY --from=builder /opt/qt/${qtversion}/resources /opt/qt/${qtversion}/resources
-COPY --from=builder /opt/qt/${qtversion}/libexec /opt/qt/${qtversion}/libexec
+#COPY --from=builder /usr/share/qt5/lib/libQt5Svg* /usr/share/qt5/lib/libQt5Widgets* /usr/share/qt5/lib/libQt5Gui* /usr/share/qt5/lib/libQt5Xml* /usr/share/qt5/lib/libQt5SerialPort* /usr/share/qt5/lib/libQt5DBus* /usr/share/qt5/lib/
+#COPY --from=builder /usr/share/qt5/plugins /usr/share/qt5/plugins
+#COPY --from=builder /usr/share/qt5/resources /usr/share/qt5/resources
+#COPY --from=builder /usr/share/qt5/libexec /usr/share/qt5/libexec
 COPY Docker/allinone/ /
 
 ENV BP_DB_PATH="/opt/ozw/config/crashes/"
