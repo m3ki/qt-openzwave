@@ -33,17 +33,17 @@ ENV DISTCC_HOSTS="$distcchosts"
 
 RUN if [ -n "${DISTCC_HOSTS}" ]; then cd /usr/local/bin; ln /usr/bin/distcc gcc;  ln /usr/bin/distcc g++; echo "Using DistCC hosts ${DISTCC_HOSTS}"; fi
 
-ENV PATH=$PATH:/opt/depot_tools/
-ENV DEPOT_TOOLS_UPDATE=0
-RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \
-	&& cd depot_tools && git checkout 464e9ff && cd .. \
-	&& mkdir breakpad \
-	&& cd breakpad \
-	&& fetch breakpad \
-	&& cd src \
-	&& ./configure --disable-processor --disable-tools \
-	&& make -j${concurrency} \
-	&& make install
+# ENV PATH=$PATH:/opt/depot_tools/
+# ENV DEPOT_TOOLS_UPDATE=0
+# RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git \
+# 	&& cd depot_tools && git checkout 464e9ff && cd .. \
+# 	&& mkdir breakpad \
+# 	&& cd breakpad \
+# 	&& fetch breakpad \
+# 	&& cd src \
+# 	&& ./configure --disable-processor --disable-tools \
+# 	&& make -j${concurrency} \
+# 	&& make install
 
 RUN git clone https://github.com/OpenZWave/open-zwave.git \
 	&& cd open-zwave \
@@ -65,7 +65,7 @@ RUN cd qt-openzwave \
 	&& if [ -f Makefile ]; then qmake -r; make distclean; fi \
 	&& qmake -r CONFIG+=release "BP_CLIENTID=$BP_CLIENTID" "BP_CLIENTKEY=$BP_CLIENTKEY" "BUILDNUMBER=$BUILDNUMBER" \
 	&& make -j${concurrency} \
-	&& make install 
+	&& make install
 
 RUN git clone https://github.com/OpenZWave/ozw-admin.git \
 	&& cd ozw-admin \
@@ -93,7 +93,7 @@ RUN apt update \
     && apt-get -y purge binutils \
     && apt-get -y autoremove \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* 
+    && rm -rf /var/lib/apt/lists/*
 
 RUN case `uname -m` in x86_64) var="amd64";; armhf) var="armhf";; armv7l) var="armhf";; aarch64) var="aarch64";; esac && wget https://github.com/just-containers/s6-overlay/releases/download/v2.0.0.1/s6-overlay-$var.tar.gz -O /tmp/s6-overlay.tar.gz \
 	&& tar xzf /tmp/s6-overlay.tar.gz -C / \
